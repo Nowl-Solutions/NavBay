@@ -1,0 +1,9 @@
+numpy
+pandas
+pyarrow
+huggingface-hub
+fsspec
+pythainlp
+matplotlib
+wordcloud
+scikit-learn
