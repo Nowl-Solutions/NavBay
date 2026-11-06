@@ -1,0 +1,8 @@
+datasets
+pandas
+numpy
+pythainlp
+wordcloud
+scikit-learn
+seaborn
+matplotlib
