@@ -61,7 +61,6 @@
         "5": 6341
       },
       "duplicate_text_rows": 191,
-      "cached_parquet_sha256": "798d185dadd25f5ef531e907b3a74f361efe9e8f29919cd9834be4a5de03fef0",
       "empty_after_tokenization": 1
     },
     "test": {
@@ -74,14 +73,8 @@
         "5": 100
       },
       "duplicate_text_rows": 0,
-      "cached_parquet_sha256": "adb47961621abf48a5daacb9b42285ba5e404b7831635b0b1c187613d6777302",
       "empty_after_tokenization": 0
     },
     "exact_text_overlap_unique": 0
-  },
-  "test_without_exact_train_overlap": {
-    "rows": 500,
-    "accuracy": 0.252
-  },
-  "test_unknown_token_fraction": 0.012014960261804581
+  }
 }

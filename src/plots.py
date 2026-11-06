@@ -1,6 +1,5 @@
 """Training-only word visualizations and held-out confusion matrix."""
 from pathlib import Path
-import os
 
 import matplotlib
 matplotlib.use("Agg")
@@ -12,13 +11,10 @@ from wordcloud import WordCloud
 
 
 def thai_font(explicit=None):
-    candidates = [explicit, os.environ.get("THAI_FONT"), "C:/Windows/Fonts/tahoma.ttf"]
-    candidates += [f.fname for f in font_manager.fontManager.ttflist
-                   if any(name in f.name.lower() for name in ("noto sans thai", "sarabun", "tlwg"))]
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            return str(candidate)
-    raise FileNotFoundError("Supply a Thai font with --font PATH or THAI_FONT")
+    path = Path(explicit) if explicit else Path("C:/Windows/Fonts/tahoma.ttf")
+    if not path.is_file():
+        raise FileNotFoundError(f"Font not found: {path}. Use --font PATH to select a Thai font.")
+    return str(path)
 
 
 def make_plots(model, matrix, output, font_path):
@@ -26,9 +22,11 @@ def make_plots(model, matrix, output, font_path):
     plt.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
     probabilities = np.exp(model.log_likelihood)
     # Union of each class's top 8 words; selection never examines test data.
-    selected = list(dict.fromkeys(
-        int(index) for row in probabilities for index in np.argsort(-row, kind="stable")[:8]
-    ))
+    selected = []
+    for row in probabilities:
+        for index in np.argsort(-row, kind="stable")[:8]:
+            if index not in selected:
+                selected.append(int(index))
     table = pd.DataFrame(probabilities[:, selected], index=model.classes,
                          columns=[model.words[i] for i in selected])
     table.index.name = "stars"

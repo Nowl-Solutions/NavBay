@@ -1,6 +1,4 @@
 """Download the supplied official splits once, then reuse local parquet files."""
-import hashlib
-
 import pandas as pd
 
 DATASET = "iamwarint/wongnai-restaurant-review"
@@ -27,7 +25,6 @@ def load_splits(directory):
             "rows": len(frame),
             "stars": frame.stars.value_counts().sort_index().to_dict(),
             "duplicate_text_rows": int(frame.review_body.duplicated().sum()),
-            "cached_parquet_sha256": hashlib.sha256(local.read_bytes()).hexdigest(),
         }
     overlap = set(frames["train"].review_body) & set(frames["test"].review_body)
     audit["exact_text_overlap_unique"] = len(overlap)

@@ -50,14 +50,6 @@ def main():
                                                         output_dict=True, zero_division=0),
         "data_audit": audit,
     }
-    novel = ~frames["test"].review_body.isin(set(frames["train"].review_body)).to_numpy()
-    metrics["test_without_exact_train_overlap"] = {
-        "rows": int(novel.sum()),
-        "accuracy": accuracy_score(actual[novel], predicted[novel]) if novel.any() else None,
-    }
-    total_tokens = sum(len(doc) for doc in documents["test"])
-    unknown = sum(word not in model.vocabulary for doc in documents["test"] for word in doc)
-    metrics["test_unknown_token_fraction"] = unknown / total_tokens if total_tokens else 0
     (output / "metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
     pd.DataFrame(matrix, index=model.classes, columns=model.classes).to_csv(output / "confusion_matrix.csv")
     predictions = frames["test"].copy()
@@ -70,45 +62,48 @@ def main():
     examples.to_csv(output / "examples.csv", index=False, encoding="utf-8-sig")
     print("Rendering heatmaps and six word clouds...", flush=True)
     make_plots(model, matrix, output, font)
-    top_words = []
-    for label, row in zip(model.classes, model.log_likelihood):
-        top_words.append(f"- {label} ดาว: " + ", ".join(model.words[i] for i in np.argsort(-row)[:8]))
     off_diagonal = matrix.copy()
     np.fill_diagonal(off_diagonal, 0)
     source, target = np.unravel_index(off_diagonal.argmax(), matrix.shape)
-    report = f"""# ผลการทดลอง Wongnai Naive Bayes
+    class_rows = "\n".join(
+        f"| {star} | {audit['train']['stars'][star]} | {audit['test']['stars'][star]} |"
+        for star in model.classes
+    )
+    report = f"""# ผลการทดลอง
 
-- Train: {len(frames['train']):,} รีวิว / Test: {len(actual):,} รีวิว (ชุดแบ่งเดิม)
-- จำนวนแต่ละดาวใน train: {audit['train']['stars']}
-- จำนวนแต่ละดาวใน test: {audit['test']['stars']}
-- Vocabulary: {len(model.words):,} คำ; Laplace alpha = 1
-- Test Accuracy: {metrics['accuracy']:.2%}
-- Macro-F1: {metrics['macro_f1']:.4f}
-- Baseline ทายดาว {majority} ทุกรีวิว: {metrics['majority_baseline_accuracy']:.2%}
-- ข้อความซ้ำตรงกันระหว่าง train/test: {audit['exact_text_overlap_unique']} ข้อความไม่ซ้ำกัน
-- ผลบน test ที่ไม่ซ้ำกับ train: {metrics['test_without_exact_train_overlap']}
-- สัดส่วน token ใน test ที่ไม่มีในคลังคำ: {metrics['test_unknown_token_fraction']:.2%}
+ใช้ชุด train {len(frames['train']):,} รีวิว และ test {len(actual):,} รีวิวตามที่ Dataset แบ่งไว้
+หลังตัดคำได้คลังคำ {len(model.words):,} คำ ฝึกด้วย Multinomial Naive Bayes และ Laplace smoothing = 1
 
-## คำที่มี P(word | stars) สูงสุดจากชุดฝึก
+| ดาว | Train | Test |
+| --- | ---: | ---: |
+{class_rows}
 
-{chr(10).join(top_words)}
+พบข้อความซ้ำตรงกันระหว่าง train/test {audit['exact_text_overlap_unique']} ข้อความ
 
-คำเหล่านี้พบบ่อยในคลาสนั้น ไม่จำเป็นต้องเป็นคำที่แยกคลาสได้ดีที่สุด
-Heatmap ใช้ความน่าจะเป็นจริงและสเกลสีเดียวกันทุกดาว ไม่มีการ normalize ใหม่เฉพาะคำที่เลือก
-Word Cloud ใช้จำนวนคำดิบจากชุดฝึก ขนาดคำเปรียบเทียบภายในภาพเป็นหลัก
+## ผลทำนาย
 
-## ข้อผิดพลาดและข้อจำกัด
+- Accuracy: **{metrics['accuracy']:.2%}** (ถูก {int((actual == predicted).sum())} จาก {len(actual)} รีวิว)
+- Macro-F1: **{metrics['macro_f1']:.4f}**
+- ถ้าทาย {majority} ดาวทุกรีวิว จะได้ Accuracy {metrics['majority_baseline_accuracy']:.2%}
 
-คู่ที่ทายผิดมากที่สุด: จริง {model.classes[source]} ดาว → ทาย {model.classes[target]} ดาว ({matrix[source, target]} รีวิว)
-ดูรายคลาสใน metrics.json และตัวอย่างถูก/ผิดใน examples.csv
-โมเดลนับคำโดยไม่รู้ลำดับคำ จึงยังตีความคำปฏิเสธ ประโยคประชด และรีวิวที่ชมปนติได้จำกัด
-เก็บคำปฏิเสธไว้แต่ไม่ได้แปลว่าโมเดลเข้าใจวลี เช่น “ไม่อร่อย” ทั้งวลี
-ข้อมูลแต่ละดาวมีจำนวนไม่เท่ากัน จึงควรพิจารณา Macro-F1 และ baseline ร่วมกับ Accuracy
-ผลครั้งนี้ทายถูก {int((actual == predicted).sum())}/{len(actual)} รีวิว เทียบ baseline {int((actual == majority).sum())}/{len(actual)} รีวิว
-Recall ของ 1 ดาว = {metrics['classification_report']['1']['recall']:.2%} และ 2 ดาว = {metrics['classification_report']['2']['recall']:.2%}
-ผลยังต่ำสำหรับการนำไปใช้งานจริง โดยเฉพาะคลาสดาวน้อย; ความไม่สมดุลของ train และข้อจำกัดของ Bag of Words เป็นประเด็นที่ควรศึกษาต่อ
-คงข้อมูลและชุดแบ่งต้นฉบับ รวมถึงข้อความซ้ำ เพื่อไม่เปลี่ยนโจทย์; ผลแยกข้างต้นตัดเฉพาะ exact overlap ตอนประเมิน
-ไม่ได้ปรับพารามิเตอร์จากผล test และไม่ได้อ้างว่าเป็นโมเดลที่ดีที่สุด
+คู่ที่ทายผิดมากที่สุดคือ {model.classes[source]} ดาวเป็น {model.classes[target]} ดาว จำนวน {matrix[source, target]} รีวิว
+ส่วน 1 และ 2 ดาวมี Recall เพียง {metrics['classification_report']['1']['recall']:.2%} และ {metrics['classification_report']['2']['recall']:.2%}
+ดูตัวอย่างทายถูกและผิดได้ใน [examples.csv](examples.csv)
+
+ผลยังไม่ดี โดยเฉพาะดาวน้อย ซึ่งมีตัวอย่างฝึกน้อยกว่าดาวอื่นมาก
+อีกข้อจำกัดคือโมเดลนับคำแยกกัน จึงไม่เข้าใจวลีอย่าง “ไม่อร่อย” แม้จะเก็บคำว่า “ไม่” ไว้แล้ว
+
+## กราฟ
+
+![ความน่าจะเป็นของคำในแต่ละดาว](word_probability_heatmap.png)
+
+Heatmap แสดง P(คำ | ดาว) จากชุดฝึก เลือก 8 คำที่มีค่าสูงสุดของแต่ละดาวแล้วรวมโดยไม่ซ้ำ
+คำที่พบบ่อยอาจพบในหลายดาว จึงไม่จำเป็นต้องเป็นคำที่ใช้แยกดาวได้ดี
+
+![ผลทำนายเทียบกับดาวจริง](confusion_matrix.png)
+
+Word Cloud มีภาพรวม `wordcloud_all.png` และแยกดาว `wordcloud_1.png` ถึง `wordcloud_5.png`
+ขนาดคำมาจากความถี่ในชุดฝึก แต่ละภาพปรับขนาดแยกกัน
 """
     (output / "summary.md").write_text(report, encoding="utf-8")
     print(f"Accuracy={metrics['accuracy']:.4f}; Macro-F1={metrics['macro_f1']:.4f}")
